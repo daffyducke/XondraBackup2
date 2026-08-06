@@ -111,11 +111,16 @@ than hand-typed, after Phase 1 caught two hand-typed vectors being wrong.
 A dedicated regression test (`Derive_iv_is_not_simply_the_first_16_...`)
 guards against silently forgetting the reversal.
 
-- [ ] **Phase 3 — Compress-then-encrypt round trip.** `BlobCodec` streaming
+- [x] **Phase 3 — Compress-then-encrypt round trip.** `BlobCodec` streaming
 GZip → AES CryptoStream and its reverse. Tests: round-trip byte equality
 (empty/small/multi-buffer content), wrong-hash decrypt does not recover
 original bytes, encrypted output ≠ plaintext. Pure `MemoryStream` in/out —
 no filesystem or Windows dependency.
+Done: all 5 tests passed on the first implementation attempt (`GZipStream`
+→ `CryptoStream`, both wrapping the caller's streams with `leaveOpen: true`
+so `BlobCodec` never closes streams it doesn't own). The wrong-hash test
+catches any exception broadly, since either a bad GZip header or bad
+PKCS7 padding is an equally valid proof the wrong key/IV can't decrypt.
 
 - [ ] **Phase 4 — Content-addressed blob store.** `BlobStore`: hash → 3-level
 sharded path (`hash[0]/hash[1]/hash[2]/hash`), `Write`/`Read`/`Exists`.
