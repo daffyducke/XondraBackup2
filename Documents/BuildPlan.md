@@ -131,7 +131,7 @@ its first planned use, since all 4 tests here need a scratch directory.
 `BlobStore` stays crypto-agnostic (opaque byte streams by hash) — no
 knowledge of `BlobCodec`, matching the `Storage/` vs `Crypto/` split.
 
-- [ ] **Phase 5 — SQLite schema + repositories (the explicit fix-the-known-issue
+- [x] **Phase 5 — SQLite schema + repositories (the explicit fix-the-known-issue
 phase).** `SqliteSchemaInitializer` runs the embedded DDL for first-run
 bootstrap. Catalog repositories — `LocalDrive`/`LocalDirectory`/
 `LocalFilename` (`GetOrInsert`), `FileRepository`, `BackupRepository`,
@@ -142,6 +142,28 @@ Tests include an explicit regression case: insert strings containing
 `'`, `'; DROP TABLE File; --` etc. through the repositories and confirm
 correct round-trip with no side effects — proof the string-concatenation
 flaw is actually fixed, not just relocated. Temp-file SQLite DBs per test.
+Done: `Xondra.dat.DDL.sql` and `Xondra.cfg.DDL.sql` are linked into
+`Xondra.Engine` as `<EmbeddedResource>` with explicit `LogicalName`s
+(not duplicated, per the folder plan); `Xondra.cfg.Data.sql` is
+deliberately *not* embedded since it's real reverse-engineered seed data
+(see the existing decision note below) — `JobSettingsRepository` tests
+seed their own `Job`/`Attribute`/`Value` rows instead.
+`SqliteSchemaInitializer` checks for a bootstrap table (`Backup` for the
+catalog DB, `Job` for config) before running the DDL, so it's safe to call
+on every startup. "Archive-bit copy-forward" landed as
+`BackupSetRepository.CopyForward(backupSetId, newBackupId)` (clones an
+existing row under a new `Backup`) plus `FindLatestForPath(driveId, dirId,
+filenameId)` (locates the prior run's row for a given path) — the two
+primitives Phase 7's `IncrementalPlanner` needs; the actual ARCHIVEBIT
+branching logic is deliberately left for Phase 7. Test temp-file SQLite
+connections need `Pooling=False` in the connection string — without it,
+Sqlite's connection pool keeps the file handle open past `Dispose()` and
+`TempDirectory`'s cleanup fails with a file-in-use error on Windows.
+`Microsoft.Data.Sqlite`'s `SqliteConnection` has no `LastInsertRowId`
+property (unlike `System.Data.SQLite`); every insert appends `SELECT
+last_insert_rowid();` and reads it back via `ExecuteScalar()`, which
+correctly skips the preceding `INSERT`'s empty result set. 63/63 tests
+passing (22 prior + 41 new).
 
 - [ ] **Phase 6 — Directory scanning.** `IFileSystem` seam (enumerate, read
 attributes/timestamps/size, get/clear Archive bit) with an AlphaFS-backed
