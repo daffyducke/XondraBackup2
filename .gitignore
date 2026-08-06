@@ -1,0 +1,9 @@
+bin/
+obj/
+Testing/TestResults/
+
+# Reverse-engineered reference DBs containing real personal data
+# (real username/path/ComputerGUID) - keep local only, never commit.
+/Xondra.cfg
+/Xondra.dat
+/Setup/Xondra.dat

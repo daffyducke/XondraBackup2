@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Xondra.Engine/Xondra.Engine.csproj" />
+  </Folder>
+  <Folder Name="/Testing/">
+    <Project Path="Testing/Xondra.Engine.Tests/Xondra.Engine.Tests.csproj" />
+  </Folder>
+</Solution>
