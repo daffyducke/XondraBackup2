@@ -97,6 +97,7 @@ Unit tests live in an xUnit test project alongside the engine (e.g.
 `Testing/Xondra.Engine.Tests/`). Test artifacts (build output, coverage
 reports, run logs) are kept under a top-level `Testing/` directory, kept
 separate from application source.
+Explain new unit tests before running them the first time.
 
 Prompt to commit changes to github for each phase and all unit tests are passing.
 

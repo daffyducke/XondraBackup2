@@ -95,7 +95,7 @@ passed in). Caught and fixed two mistyped SHA-512 test vectors (dropped
 trailing hex digit) by cross-checking against .NET's own `SHA512`/
 `HMACSHA512` output before trusting the "known vector" as ground truth.
 
-- [ ] **Phase 2 — AES key/IV derivation (fixed requirement).**
+- [x] **Phase 2 — AES key/IV derivation (fixed requirement).**
 `AesKeyDerivation.Derive(hashHex)` → 32-byte key from the first 32
 characters of the hash hex string (as ASCII bytes), 16-byte IV from the
 first 16 characters of the *reversed* hash string. Tests assert exact
@@ -105,6 +105,11 @@ correct AES-256/CBC lengths without an extra decode step — worth a quick
 gut-check against your own memory of the original scheme before treating
 Phase 2 as done, since `Common.cs` itself isn't in this repo to check
 against directly.
+Done: expected key/IV byte values in the tests were machine-computed
+(PowerShell substring/reverse against a known SHA-512 hex string) rather
+than hand-typed, after Phase 1 caught two hand-typed vectors being wrong.
+A dedicated regression test (`Derive_iv_is_not_simply_the_first_16_...`)
+guards against silently forgetting the reversal.
 
 - [ ] **Phase 3 — Compress-then-encrypt round trip.** `BlobCodec` streaming
 GZip → AES CryptoStream and its reverse. Tests: round-trip byte equality
