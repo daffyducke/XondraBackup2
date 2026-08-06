@@ -75,7 +75,7 @@ and `Testing/Xondra.Engine.Tests` xUnit project; wire references. NuGet:
 `Microsoft.Data.Sqlite` (engine), `xunit`/`xunit.runner.visualstudio`/
 `Microsoft.NET.Test.Sdk`/`FluentAssertions`/`coverlet.collector` (tests).
 One trivial sanity test proves the harness is wired before real TDD starts.
-Done: targets `net10.0`, not `net10.0` — only the .NET 10 SDK/runtime is
+Done: targets `net10.0`, not `net8.0` — only the .NET 10 SDK/runtime is
 installed on this machine, and .NET 10 is itself the current LTS, so it's
 a newer instance of the same "target the LTS" intent. Solution file is
 `Xondra.slnx` (the SDK's current default format, not `.sln`). Pinned
@@ -122,10 +122,14 @@ so `BlobCodec` never closes streams it doesn't own). The wrong-hash test
 catches any exception broadly, since either a bad GZip header or bad
 PKCS7 padding is an equally valid proof the wrong key/IV can't decrypt.
 
-- [ ] **Phase 4 — Content-addressed blob store.** `BlobStore`: hash → 3-level
+- [x] **Phase 4 — Content-addressed blob store.** `BlobStore`: hash → 3-level
 sharded path (`hash[0]/hash[1]/hash[2]/hash`), `Write`/`Read`/`Exists`.
 Tests: correct shard path, byte-identical read-back, idempotent
 double-write (backs the dedup skip-if-stored behavior tested in Phase 8).
+Done: added the `TestSupport/TempDirectory` helper a phase earlier than
+its first planned use, since all 4 tests here need a scratch directory.
+`BlobStore` stays crypto-agnostic (opaque byte streams by hash) — no
+knowledge of `BlobCodec`, matching the `Storage/` vs `Crypto/` split.
 
 - [ ] **Phase 5 — SQLite schema + repositories (the explicit fix-the-known-issue
 phase).** `SqliteSchemaInitializer` runs the embedded DDL for first-run
