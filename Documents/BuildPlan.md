@@ -83,10 +83,17 @@ a newer instance of the same "target the LTS" intent. Solution file is
 transitive vulnerability warning on the version `Microsoft.Data.Sqlite`
 pulls in by default. Sanity test: `EngineInfo.SchemaVersion == 1`.
 
-- [ ] **Phase 1 — Hashing primitives.** `Sha512Hasher` (file/stream → 128-char
+- [x] **Phase 1 — Hashing primitives.** `Sha512Hasher` (file/stream → 128-char
 hex), `HmacSha512Deriver`. Tests: known SHA-512 vectors, file/stream
 hashes agree, HMAC is deterministic. Pure BCL crypto, no I/O beyond a
 stream.
+Done: `HmacSha512Deriver.Derive(key, content)` takes an explicit key rather
+than deriving one from "part of the file hash" — `Common.cs` isn't in this
+repo to confirm the exact byte-slicing convention against, so the key
+convention is deferred to Phase 2/8 (`AesKeyDerivation`'s key bytes will be
+passed in). Caught and fixed two mistyped SHA-512 test vectors (dropped
+trailing hex digit) by cross-checking against .NET's own `SHA512`/
+`HMACSHA512` output before trusting the "known vector" as ground truth.
 
 - [ ] **Phase 2 — AES key/IV derivation (fixed requirement).**
 `AesKeyDerivation.Derive(hashHex)` → 32-byte key from the first 32

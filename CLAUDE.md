@@ -98,6 +98,8 @@ Unit tests live in an xUnit test project alongside the engine (e.g.
 reports, run logs) are kept under a top-level `Testing/` directory, kept
 separate from application source.
 
+Prompt to commit changes to github for each phase and all unit tests are passing.
+
 ## Code style
 
 Prefer easy-to-read code over clever code. Keep comments minimal — only
