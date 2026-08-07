@@ -199,11 +199,28 @@ exercised, not just assumed to work. 67/67 tests passing (63 prior + 4 new
 subdirectories-only-isn't-empty edge case, and both fake-filesystem error
 paths in one file, not four).
 
-- [ ] **Phase 7 — Incremental (Archive-bit) planning.** `IncrementalPlanner`:
+- [x] **Phase 7 — Incremental (Archive-bit) planning.** `IncrementalPlanner`:
 for `BackupType == "ARCHIVEBIT"`, files with the bit unset get their prior
 `BackupSet` row copied forward (excluded from reprocessing); everything
 else is processed. Tests seed a prior `Backup`/`BackupSet` row and assert
 both branches.
+Done: `IncrementalPlanner.Plan(backupType, newBackupId, files)` takes
+`backupType` as a plain string rather than a `BackupConfig` object —
+`BackupConfig` doesn't exist yet and is Phase 10's concern (job-settings
+orchestration), so building it early just to pass one string through
+would be a premature abstraction. Uses the Phase 5 primitives exactly as
+planned: `FindLatestForPath` (resolving `Drive`/`Directory`/`Filename`
+through the lookup repositories' `GetOrInsert`, since scan results carry
+plain strings, not catalog IDs) to find the prior run's row, then
+`CopyForward` to clone it under the new `Backup`. Lookup-table
+`GetOrInsert` calls only happen for files actually eligible for
+copy-forward (bit unset) — files with the bit set, or any file when
+`BackupType != "ARCHIVEBIT"`, never touch `LocalDrive`/`LocalDirectory`/
+`LocalFilename`, so a `"FULL"` run does zero incidental catalog writes.
+A file with the bit unset but no prior `BackupSet` row (never backed up
+before) correctly falls through to reprocessing — the "everything else is
+processed" branch also covers that edge case, not just the changed-file
+case. 71/71 tests passing (67 prior + 4 new).
 
 - [ ] **Phase 8 — Per-file backup worker.** `FileBackupWorker`: hash → HMAC →
 dedup-lookup by `OriginalFileHash` → insert `File`/compress+encrypt into
