@@ -222,7 +222,7 @@ before) correctly falls through to reprocessing — the "everything else is
 processed" branch also covers that edge case, not just the changed-file
 case. 71/71 tests passing (67 prior + 4 new).
 
-- [ ] **Phase 8 — Per-file backup worker.** `FileBackupWorker`: hash → HMAC →
+- [x] **Phase 8 — Per-file backup worker.** `FileBackupWorker`: hash → HMAC →
 dedup-lookup by `OriginalFileHash` → insert `File`/compress+encrypt into
 `BlobStore` if new, else link-only → insert `BackupSet` → clear Archive
 bit → catch and log per-file `IOException`/`UnauthorizedAccessException`/
@@ -230,6 +230,31 @@ general exceptions to `ErrorRepository` without aborting. Tests: new-content
 path, duplicate-content path (two paths/one blob — the dedup proof),
 failure path via a throwing fake `IFileSystem` that still lets the loop
 continue.
+Done: resolved the Phase 1 "HMAC key convention deferred to Phase 2/8"
+note exactly as flagged — the HMAC key is `AesKeyDerivation.Derive(originalFileHash).Key`,
+the same 32-byte key used for AES, not a separately managed secret.
+`IFileSystem` gained `Stream OpenRead(string filePath)` (Phase 6 only
+needed enumerate/stat/clear-archive-bit, not content access); `WindowsFileSystem`
+delegates to `AlphaFile.OpenRead`, and `FakeFileSystem` gained
+`AddFileContent`/`FailOpenRead` to back it. The "backup hash" that keys
+the `BlobStore` blob is the SHA-512 of the *compressed+encrypted* bytes
+(computed by buffering `BlobCodec.CompressThenEncrypt`'s output into a
+`MemoryStream`, hashing it, then writing under that hash) — distinct from
+`OriginalFileHash`, matching `CodeReview-Summary.md`'s "temp file is
+renamed to its own SHA-512 hash" description; `BlobCodec.DecryptThenDecompress`
+still needs the *original* hash (for the AES key/IV), not the backup hash,
+which the new-content-path test round-trips end to end to prove. Dedup
+lookup treats an existing `File` row with a still-`null` `BackupHash` as
+"not actually stored yet" and re-runs the store step — a defensive branch
+for a prior run that inserted the `File` row but crashed before
+compressing/encrypting, so a future run doesn't perma-skip a blob that
+was never written. `BackupFile(backupId, file)` processes exactly one
+file and never throws (catches internally, logs to `ErrorRepository`,
+returns normally) — the loop over multiple files lives in the caller
+(`BackupRunner`, Phase 10), matching that phase's own "loop
+`FileBackupWorker`" wording; the failure-path test builds its own
+two-file loop to prove one bad file doesn't stop the next. 74/74 tests
+passing (71 prior + 3 new).
 
 - [ ] **Phase 9 — VSS seam.** `IVssSnapshotProvider` / `NullVssSnapshotProvider`
 (passthrough for `UseVSS=false`) / `AlphaVssSnapshotProvider` (real).

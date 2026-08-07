@@ -6,6 +6,7 @@ public interface IFileSystem
     IEnumerable<string> EnumerateDirectories(string directoryPath);
     FileEntryInfo GetFileInfo(string filePath);
     void ClearArchiveBit(string filePath);
+    Stream OpenRead(string filePath);
 }
 
 public record FileEntryInfo(long Size, DateTime CreationTimeUtc, DateTime LastWriteTimeUtc, FileAttributes Attributes)

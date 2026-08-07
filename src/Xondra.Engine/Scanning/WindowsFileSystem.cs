@@ -25,4 +25,6 @@ public class WindowsFileSystem : IFileSystem
         if (attributes.HasFlag(FileAttributes.Archive))
             AlphaFile.SetAttributes(filePath, attributes & ~FileAttributes.Archive);
     }
+
+    public Stream OpenRead(string filePath) => AlphaFile.OpenRead(filePath);
 }

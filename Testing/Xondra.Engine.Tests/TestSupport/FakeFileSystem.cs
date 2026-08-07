@@ -7,8 +7,10 @@ public class FakeFileSystem : IFileSystem
     private readonly Dictionary<string, List<string>> _filesByDirectory = new();
     private readonly Dictionary<string, List<string>> _subdirectoriesByDirectory = new();
     private readonly Dictionary<string, FileEntryInfo> _fileInfoByPath = new();
+    private readonly Dictionary<string, byte[]> _contentByPath = new();
     private readonly HashSet<string> _deniedDirectories = new();
     private readonly HashSet<string> _missingFiles = new();
+    private readonly HashSet<string> _openReadFailures = new();
 
     public List<string> ClearedArchiveBitCalls { get; } = [];
 
@@ -23,6 +25,10 @@ public class FakeFileSystem : IFileSystem
     public void DenyAccess(string directoryPath) => _deniedDirectories.Add(directoryPath);
 
     public void MakeFileDisappear(string filePath) => _missingFiles.Add(filePath);
+
+    public void AddFileContent(string filePath, byte[] content) => _contentByPath[filePath] = content;
+
+    public void FailOpenRead(string filePath) => _openReadFailures.Add(filePath);
 
     public IEnumerable<string> EnumerateFiles(string directoryPath)
     {
@@ -44,6 +50,13 @@ public class FakeFileSystem : IFileSystem
     }
 
     public void ClearArchiveBit(string filePath) => ClearedArchiveBitCalls.Add(filePath);
+
+    public Stream OpenRead(string filePath)
+    {
+        if (_openReadFailures.Contains(filePath))
+            throw new IOException($"Simulated read failure: {filePath}");
+        return new MemoryStream(_contentByPath[filePath]);
+    }
 
     private void ThrowIfDenied(string directoryPath)
     {
