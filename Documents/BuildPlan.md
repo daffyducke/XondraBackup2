@@ -428,11 +428,39 @@ time* (Archive bit included) — proven by asserting the restored file's
 Archive bit is set even though the live source file's bit was cleared by
 the backup that captured it. 92/92 tests passing (90 prior + 2 new).
 
-- [ ] **Phase 13 — Thin CLI harness.** `Xondra.Cli`: `backup <jobId>`,
+- [x] **Phase 13 — Thin CLI harness.** `Xondra.Cli`: `backup <jobId>`,
 `verify <mode>`, `restore <backupId> <targetDir>` — glue only, no new
 logic, not itself unit-tested. First thing that can exercise real
 VSS/locked files/long paths by hand on an actual machine, ahead of any
 GUI (which is out of scope for this plan).
+Done: the phase's own three commands are each missing one or two paths a
+real composition root needs but a one-line description can't carry — the
+config DB location, and the shared directory where `Xondra.dat` + blobs
+live — so the actual signatures are `backup <jobId> <cfgDbPath>
+<backupDirectory>`, `verify <mode> <backupDirectory> [backupId]`, and
+`restore <backupId> <restoreTargetDirectory> <backupDirectory>`; the
+phase's named arguments are all still there as a leading prefix of each
+real invocation. `verify`'s `[backupId]` is optional and required only
+for `CurrentBackup` mode (checked and rejected with a clear message
+otherwise, not a crash). No try/catch anywhere in `Program.cs` — an
+unhandled exception's default stack-trace-and-nonzero-exit *is* the
+error handling for a harness whose job is "glue only, no new logic";
+adding a wrapper here would be logic this phase doesn't own. Genuinely
+smoke-tested end to end as a real separate process (`dotnet run
+--project src/Xondra.Cli -- backup/verify/restore ...`, not just unit
+tests calling into the same objects in-process) against real temp
+directories with `UseVSS=false`: backup produced a real `Xondra.dat` +
+sharded blob, verify reported `1 passed, 0 failed`, restore reproduced
+the file byte-for-byte at its full reconstructed path, and both the
+no-args and unknown-command paths print usage and exit 1 (confirmed
+without a shell pipe swallowing the real exit code, which the first
+attempt at checking this got wrong). `UseVSS=true` against a real VSS
+snapshot still needs an elevated Windows session by hand, per the
+Verification section below — this phase only proves the CLI's own
+wiring, not what Phase 9 already covers separately in
+`Xondra.Engine.IntegrationTests`. Engine test suite unaffected: still
+92/92 (this phase adds no engine-level tests, matching "not itself
+unit-tested").
 
 - [ ] **Phase 14 (deferred) — In-memory mode.** `:memory:` staging connection +
 SQLite's native online-backup API, flushed to disk every
