@@ -165,7 +165,7 @@ last_insert_rowid();` and reads it back via `ExecuteScalar()`, which
 correctly skips the preceding `INSERT`'s empty result set. 63/63 tests
 passing (22 prior + 41 new).
 
-- [ ] **Phase 6 — Directory scanning.** `IFileSystem` seam (enumerate, read
+- [x] **Phase 6 — Directory scanning.** `IFileSystem` seam (enumerate, read
 attributes/timestamps/size, get/clear Archive bit) with an AlphaFS-backed
 `WindowsFileSystem` for long-path support; `DirectoryScanner` walks a
 source root into in-memory `ScannedFile`/`ScannedDirectory` records
@@ -175,6 +175,29 @@ cleared-Archive-bit file and an empty subdirectory, asserted against
 scanner output; a fake `IFileSystem` exercises error paths without real
 ACLs. No VSS/admin required — Archive bit and attributes are plain NTFS
 features.
+Done: `AlphaFS 2.2.6` (the latest release; last published 2018) only ships
+`.NETFramework` targets and restores under net10.0 via NuGet's compat
+shim (`NU1701` warning on every build) — the same role `Alphaleonis.Win32.Filesystem`
+served in the legacy engine, kept per `CLAUDE.md`'s explicit stack choice
+rather than swapped for `System.IO`'s partial native long-path support.
+`Alphaleonis.Win32.Filesystem.Directory`/`File`/`FileInfo` collide by name
+with `System.IO`'s (pulled in by `ImplicitUsings`), so `WindowsFileSystem`
+imports them under `AlphaDirectory`/`AlphaFile`/`AlphaFileInfo` aliases.
+`ScannedDirectory` intentionally only ever represents *empty* directories
+(no files, no subdirectories) — every other directory is already implied
+by the `Directory` on the `ScannedFile`s inside it, matching what
+`BackupSetEmptyDir` actually needs to store. `DirectoryScanner` catches
+`UnauthorizedAccessException`/`IOException` per directory (enumeration)
+and per file (stat) and continues the walk, collecting each into a
+`ScanError` on the result rather than logging directly — the scanner has
+no `Data` dependency, so persisting these through `ErrorRepository` is
+Phase 10's job when it has a `Backup` row to attach them to. Verified the
+happy-path test against the real filesystem through `WindowsFileSystem`
+(not just the fake), so the AlphaFS compat-shim path is actually
+exercised, not just assumed to work. 67/67 tests passing (63 prior + 4 new
+— `DirectoryScannerTests` covers the real-tree walk, the
+subdirectories-only-isn't-empty edge case, and both fake-filesystem error
+paths in one file, not four).
 
 - [ ] **Phase 7 — Incremental (Archive-bit) planning.** `IncrementalPlanner`:
 for `BackupType == "ARCHIVEBIT"`, files with the bit unset get their prior
