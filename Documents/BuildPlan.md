@@ -299,7 +299,7 @@ from `[Fact(Skip=...)]`, so `dotnet test Testing/Xondra.Engine.IntegrationTests`
 create→use→dispose lifecycle correctly — standing in for that proof now,
 consumed for real by Phase 10. 78/78 tests passing (74 prior + 4 new).
 
-- [ ] **Phase 10 — Backup orchestration (first end-to-end pipeline).**
+- [x] **Phase 10 — Backup orchestration (first end-to-end pipeline).**
 `BackupRunner.Run(jobId)`: load settings → start `Backup` row → scan →
 normalize lookups → incremental plan → resolve root via
 `IVssSnapshotProvider` → loop `FileBackupWorker` → record empty
@@ -308,6 +308,49 @@ over a real temp source/target tree + temp-file DBs + fake VSS provider,
 asserting final `Backup` row/rows/blobs, and that a second run against an
 unmodified tree takes the incremental path (no new blobs, rows copied
 forward). Still fully headless.
+Done: `BackupConfig.Parse(settingsJson)` reads `JobSettingsRepository`'s
+flat `{AttributeName: value}` JSON — `SourceDirectory` required (throws
+`FormatException` if missing), `UseVSS`/`BackupType` default to
+`false`/`"FULL"` when absent, and `UseVSS` accepts either a JSON boolean
+or a JSON string (`Value.Value` is a SQLite `STRING` column, so
+`Settings_Json` typically renders it as `"true"`/`"false"` text, not a
+JSON boolean) — parsed via `bool.TryParse`, which is case-insensitive.
+Deliberately excludes `TargetDirectory`/in-memory-mode settings:
+`BackupRunner.Run` never opens its own catalog connection or resolves a
+`BlobStore` root — those are constructed by the composition root
+(`Xondra.Cli`, Phase 13) and injected in, so nothing in this phase's own
+logic consumes them; adding fields nothing reads would be modeling
+speculative future settings, not this phase's actual requirement.
+The one real design problem this phase raised: a VSS snapshot's device
+path (`\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\...`) is only
+valid for *reading* content during the run — every `BackupSet` row must
+still record the real, logical source path, or incremental matching and
+restore break the moment a real snapshot (not the passthrough
+`NullVssSnapshotProvider`) is in play. Solved by scanning the *physical*
+(possibly-snapshot) root as before, then relocating each `ScannedFile`/
+`ScannedDirectory`'s `Drive`/`Directory` back onto the *logical*
+`config.SourceDirectory` via plain string-prefix substitution (`file with
+{ Drive = ..., Directory = ... }`) before anything touches the catalog —
+deliberately avoiding `Path.GetPathRoot` on the physical/device-path side
+entirely, since a `\\?\GLOBALROOT\...` string doesn't parse as a normal
+drive root and would need real VSS to validate against; the substitution
+only needs the physical root to be a literal prefix, which holds
+regardless of its shape. `ScannedFile.FullPath` is deliberately left
+untouched by relocation (stays physical) since it's never persisted —
+only used in-process by `FileBackupWorker` to actually open the file —
+which is what lets `IncrementalPlanner`/`FileBackupWorker` consume
+already-relocated files with no VSS-awareness of their own. Proved this
+works without real VSS by pointing `FakeVssSnapshotProvider` at one real
+temp directory while setting `config.SourceDirectory` to an unrelated,
+non-existent logical path (`D:\LogicalOnlySource`) — the dedicated test
+confirms content is hashed/stored from the real physical file while the
+`BackupSet` row's `DirID` resolves to the logical path, proving the two
+are genuinely decoupled rather than coincidentally equal. `Backup.FileCount`
+is computed as `backupSetRepository.GetByBackupId(backupId).Count` after
+the run (covers both freshly-processed and copied-forward rows) rather
+than a separately-tracked counter, so it can't drift from what's actually
+in the catalog. 85/85 tests passing (78 prior + 7 new — 4 `BackupConfig`,
+3 `BackupRunner`).
 
 - [ ] **Phase 11 — Verify.** `FileVerifier.VerifyFiles(mode)` for
 `CurrentBackup`/`AllNotVerified`/`All`: decrypt+decompress to temp,
