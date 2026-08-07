@@ -382,7 +382,7 @@ temp file in a `finally`, verified by a dedicated test that snapshots
 `Directory.GetFiles(Path.GetTempPath()).Length` before/after verifying
 both a good and a corrupted file. 90/90 tests passing (85 prior + 5 new).
 
-- [ ] **Phase 12 — Restore.** `RestoreService.RestoreFiles(backupId, targetRoot)`:
+- [x] **Phase 12 — Restore.** `RestoreService.RestoreFiles(backupId, targetRoot)`:
 join scoped to one verified backup, recreate directories, decrypt/decompress
 to original relative path, restore timestamps/attributes, re-verify and
 delete-on-mismatch; `RestoreEmptyDirectories` for dirless directories.
@@ -390,6 +390,43 @@ Test: full backup→restore round trip (including duplicate-content files
 and an empty directory) asserting byte-identical output and
 timestamp/attribute preservation, plus a corrupted-blob case that deletes
 rather than leaves a bad file.
+Done: `IFileSystem` gained its last four members this phase needed and
+didn't have — `Create` (writable stream), `CreateDirectory`,
+`SetTimestampsAndAttributes`, `DeleteFile` — all via the same
+`AlphaDirectory`/`AlphaFile` aliases `WindowsFileSystem` already used;
+`FakeFileSystem` grew a small `WriteBackStream` (a `MemoryStream` whose
+`Dispose` commits its bytes into the fake's content dictionary) so a
+future test can assert on written content without needing the real
+filesystem. `BackupSetRepository.GetRestorableFiles`/`BackupSetEmptyDirRepository.GetDirectories`
+are the only two queries in the whole data layer that join across four
+and three tables respectively (`BackupSet`+`File`+`LocalDrive`+`LocalDirectory`+`LocalFilename`,
+and `BackupSetEmptyDir`+`LocalDrive`+`LocalDirectory`) — the "join scoped
+to one verified backup" the phase names is `f.LocalVerified = 1 AND
+f.BackupHash IS NOT NULL` in the `WHERE` clause, so an unverified or
+never-actually-stored `File` row is silently excluded from restore
+altogether rather than attempted and failed. The one thing that didn't
+match my first guess: `BackupSet.Directory` records the file's *entire*
+containing path minus its drive letter, not a path relative to some
+backup root (this was already true from Phase 8's scanner/worker, just
+hadn't mattered until something read it back) — so restoring under
+`targetRoot` reconstructs the whole original directory structure there,
+e.g. backing up `C:\Users\daffy\Documents` and restoring to `D:\Restore`
+produces `D:\Restore\Users\daffy\Documents\...`, not
+`D:\Restore\...`. The round-trip test's first draft asserted the wrong
+(too-short) restored path for exactly this reason — caught by the test
+actually failing, not by inspection, which is the TDD contract at work.
+The hash re-check happens a *second* time independently of the stored
+`LocalVerified` flag (`RestoreOne` always decrypts, re-hashes, and
+compares against `OriginalFileHash` before trusting the write) — the
+corrupted-blob test proves this by seeding a `File` row with
+`LocalVerified = true` but a blob that was never legitimately encrypted,
+so only this in-restore re-check catches it, matching "re-verifies the
+SHA-512 hash of the restored file" from `CodeReview-Summary.md` rather
+than just trusting the catalog's prior verification pass. Attribute
+restoration reproduces the file exactly as it was *captured at scan
+time* (Archive bit included) — proven by asserting the restored file's
+Archive bit is set even though the live source file's bit was cleared by
+the backup that captured it. 92/92 tests passing (90 prior + 2 new).
 
 - [ ] **Phase 13 — Thin CLI harness.** `Xondra.Cli`: `backup <jobId>`,
 `verify <mode>`, `restore <backupId> <targetDir>` — glue only, no new

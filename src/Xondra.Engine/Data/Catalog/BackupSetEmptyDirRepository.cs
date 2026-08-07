@@ -40,4 +40,23 @@ public class BackupSetEmptyDirRepository(SqliteConnection connection)
         }
         return results;
     }
+
+    public IReadOnlyList<(string Drive, string Directory)> GetDirectories(long backupId)
+    {
+        using var select = connection.CreateCommand();
+        select.CommandText = """
+            SELECT ld.Drive, ldir.Directory
+            FROM BackupSetEmptyDir bed
+            INNER JOIN LocalDrive ld ON ld.ID = bed.DriveID
+            INNER JOIN LocalDirectory ldir ON ldir.ID = bed.DirID
+            WHERE bed.BackupID = @backupId
+            """;
+        select.Parameters.AddWithValue("@backupId", backupId);
+
+        var results = new List<(string, string)>();
+        using var reader = select.ExecuteReader();
+        while (reader.Read())
+            results.Add((reader.GetString(0), reader.GetString(1)));
+        return results;
+    }
 }

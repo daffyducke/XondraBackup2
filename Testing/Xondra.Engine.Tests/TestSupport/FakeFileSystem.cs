@@ -13,6 +13,8 @@ public class FakeFileSystem : IFileSystem
     private readonly HashSet<string> _openReadFailures = new();
 
     public List<string> ClearedArchiveBitCalls { get; } = [];
+    public List<string> CreatedDirectories { get; } = [];
+    public List<string> DeletedFiles { get; } = [];
 
     public void AddDirectory(string directoryPath, IEnumerable<string>? files = null, IEnumerable<string>? subdirectories = null)
     {
@@ -56,6 +58,30 @@ public class FakeFileSystem : IFileSystem
         if (_openReadFailures.Contains(filePath))
             throw new IOException($"Simulated read failure: {filePath}");
         return new MemoryStream(_contentByPath[filePath]);
+    }
+
+    public Stream Create(string filePath) => new WriteBackStream(bytes => _contentByPath[filePath] = bytes);
+
+    public void CreateDirectory(string directoryPath) => CreatedDirectories.Add(directoryPath);
+
+    public void SetTimestampsAndAttributes(string filePath, DateTime creationTimeUtc, DateTime lastWriteTimeUtc, FileAttributes attributes) =>
+        _fileInfoByPath[filePath] = new FileEntryInfo(_contentByPath.TryGetValue(filePath, out var bytes) ? bytes.Length : 0,
+            creationTimeUtc, lastWriteTimeUtc, attributes);
+
+    public void DeleteFile(string filePath)
+    {
+        _contentByPath.Remove(filePath);
+        DeletedFiles.Add(filePath);
+    }
+
+    private sealed class WriteBackStream(Action<byte[]> onClose) : MemoryStream
+    {
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                onClose(ToArray());
+            base.Dispose(disposing);
+        }
     }
 
     private void ThrowIfDenied(string directoryPath)

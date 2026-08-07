@@ -27,4 +27,17 @@ public class WindowsFileSystem : IFileSystem
     }
 
     public Stream OpenRead(string filePath) => AlphaFile.OpenRead(filePath);
+
+    public Stream Create(string filePath) => AlphaFile.Create(filePath);
+
+    public void CreateDirectory(string directoryPath) => AlphaDirectory.CreateDirectory(directoryPath);
+
+    public void SetTimestampsAndAttributes(string filePath, DateTime creationTimeUtc, DateTime lastWriteTimeUtc, FileAttributes attributes)
+    {
+        AlphaFile.SetCreationTimeUtc(filePath, creationTimeUtc);
+        AlphaFile.SetLastWriteTimeUtc(filePath, lastWriteTimeUtc);
+        AlphaFile.SetAttributes(filePath, attributes);
+    }
+
+    public void DeleteFile(string filePath) => AlphaFile.Delete(filePath);
 }

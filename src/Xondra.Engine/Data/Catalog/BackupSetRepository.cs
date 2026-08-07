@@ -66,6 +66,38 @@ public class BackupSetRepository(SqliteConnection connection)
         return ReadSingle(select);
     }
 
+    public IReadOnlyList<RestorableFileRecord> GetRestorableFiles(long backupId)
+    {
+        using var select = connection.CreateCommand();
+        select.CommandText = """
+            SELECT f.ID, ld.Drive, ldir.Directory, lf.Filename, f.OriginalFileHash, f.BackupHash, bs.Attributes, bs.CreationTime, bs.LastWriteTime
+            FROM BackupSet bs
+            INNER JOIN File f ON f.ID = bs.FileID
+            INNER JOIN LocalDrive ld ON ld.ID = bs.DriveID
+            INNER JOIN LocalDirectory ldir ON ldir.ID = bs.DirID
+            INNER JOIN LocalFilename lf ON lf.ID = bs.FilenameID
+            WHERE bs.BackupID = @backupId AND f.LocalVerified = 1 AND f.BackupHash IS NOT NULL
+            """;
+        select.Parameters.AddWithValue("@backupId", backupId);
+
+        var results = new List<RestorableFileRecord>();
+        using var reader = select.ExecuteReader();
+        while (reader.Read())
+        {
+            results.Add(new RestorableFileRecord(
+                reader.GetInt64(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetInt32(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8)));
+        }
+        return results;
+    }
+
     private const string SelectColumns =
         "SELECT ID, BackupID, DirID, FileID, FilenameID, DriveID, Error, Attributes, CreationTime, LastWriteTime FROM BackupSet ";
 

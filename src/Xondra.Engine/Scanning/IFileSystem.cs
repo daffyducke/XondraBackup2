@@ -7,6 +7,10 @@ public interface IFileSystem
     FileEntryInfo GetFileInfo(string filePath);
     void ClearArchiveBit(string filePath);
     Stream OpenRead(string filePath);
+    Stream Create(string filePath);
+    void CreateDirectory(string directoryPath);
+    void SetTimestampsAndAttributes(string filePath, DateTime creationTimeUtc, DateTime lastWriteTimeUtc, FileAttributes attributes);
+    void DeleteFile(string filePath);
 }
 
 public record FileEntryInfo(long Size, DateTime CreationTimeUtc, DateTime LastWriteTimeUtc, FileAttributes Attributes)
