@@ -50,4 +50,36 @@ public class BackupConfigTests
 
         act.Should().Throw<FormatException>();
     }
+
+    [Fact]
+    public void Parse_reads_InMemoryMode_and_InMemoryBackupInterval()
+    {
+        var json = """{"SourceDirectory":"C:\\Data","InMemoryMode":"true","InMemoryBackupInterval":"50"}""";
+
+        var config = BackupConfig.Parse(json);
+
+        config.InMemoryMode.Should().BeTrue();
+        config.InMemoryBackupInterval.Should().Be(50);
+    }
+
+    [Fact]
+    public void Parse_accepts_a_json_number_for_InMemoryBackupInterval()
+    {
+        var json = """{"SourceDirectory":"C:\\Data","InMemoryBackupInterval":50}""";
+
+        var config = BackupConfig.Parse(json);
+
+        config.InMemoryBackupInterval.Should().Be(50);
+    }
+
+    [Fact]
+    public void Parse_defaults_InMemoryMode_to_false_and_InMemoryBackupInterval_to_100_when_absent()
+    {
+        var json = """{"SourceDirectory":"C:\\Data"}""";
+
+        var config = BackupConfig.Parse(json);
+
+        config.InMemoryMode.Should().BeFalse();
+        config.InMemoryBackupInterval.Should().Be(100);
+    }
 }

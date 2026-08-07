@@ -43,23 +43,40 @@ static int RunBackup(string[] args)
     Directory.CreateDirectory(backupDirectory);
 
     using var cfgConnection = OpenExistingConfig(cfgDbPath);
-    using var catalogConnection = OpenOrCreateCatalog(backupDirectory);
+    using var onDiskConnection = OpenOrCreateCatalog(backupDirectory);
 
+    var jobSettingsRepository = new JobSettingsRepository(cfgConnection);
+    var settingsJson = jobSettingsRepository.GetBackupSettingsJson(jobId)
+        ?? throw new InvalidOperationException($"No backup settings found for job {jobId}.");
+    var config = BackupConfig.Parse(settingsJson);
+
+    using var inMemoryConnection = config.InMemoryMode ? OpenInMemoryCatalog() : null;
+    if (inMemoryConnection is not null)
+        onDiskConnection.BackupDatabase(inMemoryConnection); // seed with any prior-run history so incremental matching still works
+
+    var repoConnection = inMemoryConnection ?? onDiskConnection;
     var fileSystem = new WindowsFileSystem();
     var blobStore = new BlobStore(backupDirectory);
-    var driveRepository = new LocalDriveRepository(catalogConnection);
-    var directoryRepository = new LocalDirectoryRepository(catalogConnection);
-    var filenameRepository = new LocalFilenameRepository(catalogConnection);
-    var fileRepository = new FileRepository(catalogConnection);
-    var backupSetRepository = new BackupSetRepository(catalogConnection);
-    var backupRepository = new BackupRepository(catalogConnection);
-    var errorRepository = new ErrorRepository(catalogConnection);
-    var emptyDirRepository = new BackupSetEmptyDirRepository(catalogConnection);
-    var jobSettingsRepository = new JobSettingsRepository(cfgConnection);
+    var driveRepository = new LocalDriveRepository(repoConnection);
+    var directoryRepository = new LocalDirectoryRepository(repoConnection);
+    var filenameRepository = new LocalFilenameRepository(repoConnection);
+    var fileRepository = new FileRepository(repoConnection);
+    var backupSetRepository = new BackupSetRepository(repoConnection);
+    var backupRepository = new BackupRepository(repoConnection);
+    var errorRepository = new ErrorRepository(repoConnection);
+    var emptyDirRepository = new BackupSetEmptyDirRepository(repoConnection);
 
     var incrementalPlanner = new IncrementalPlanner(driveRepository, directoryRepository, filenameRepository, backupSetRepository);
-    var fileBackupWorker = new FileBackupWorker(fileSystem, blobStore, fileRepository, backupSetRepository,
+    IFileBackupWorker fileBackupWorker = new FileBackupWorker(fileSystem, blobStore, fileRepository, backupSetRepository,
         driveRepository, directoryRepository, filenameRepository, errorRepository);
+
+    InMemoryFlushingFileBackupWorker? flushingWorker = null;
+    if (inMemoryConnection is not null)
+    {
+        flushingWorker = new InMemoryFlushingFileBackupWorker(
+            fileBackupWorker, inMemoryConnection, onDiskConnection, config.InMemoryBackupInterval);
+        fileBackupWorker = flushingWorker;
+    }
 
     IVssSnapshotProvider vssSnapshotProvider = new AlphaVssSnapshotProvider();
 
@@ -68,6 +85,8 @@ static int RunBackup(string[] args)
         incrementalPlanner, fileBackupWorker);
 
     var backupId = runner.Run(jobId);
+    flushingWorker?.Flush();
+
     Console.WriteLine($"Backup {backupId} complete.");
     return 0;
 }
@@ -146,6 +165,14 @@ static SqliteConnection OpenOrCreateCatalog(string backupDirectory)
 {
     var dbPath = Path.Combine(backupDirectory, "Xondra.dat");
     var connection = new SqliteConnection($"Data Source={dbPath}");
+    connection.Open();
+    SqliteSchemaInitializer.InitializeCatalog(connection);
+    return connection;
+}
+
+static SqliteConnection OpenInMemoryCatalog()
+{
+    var connection = new SqliteConnection("Data Source=:memory:");
     connection.Open();
     SqliteSchemaInitializer.InitializeCatalog(connection);
     return connection;

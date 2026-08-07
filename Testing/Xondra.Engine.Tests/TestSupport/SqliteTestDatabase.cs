@@ -12,6 +12,14 @@ public static class SqliteTestDatabase
         return connection;
     }
 
+    public static SqliteConnection CreateInMemoryCatalog()
+    {
+        var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        SqliteSchemaInitializer.InitializeCatalog(connection);
+        return connection;
+    }
+
     public static SqliteConnection CreateConfig(string directory)
     {
         var connection = OpenFile(directory, "config.db");

@@ -14,7 +14,7 @@ public class FileBackupWorker(
     LocalDriveRepository driveRepository,
     LocalDirectoryRepository directoryRepository,
     LocalFilenameRepository filenameRepository,
-    ErrorRepository errorRepository)
+    ErrorRepository errorRepository) : IFileBackupWorker
 {
     public void BackupFile(long backupId, ScannedFile file)
     {

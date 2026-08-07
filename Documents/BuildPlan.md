@@ -462,13 +462,62 @@ wiring, not what Phase 9 already covers separately in
 92/92 (this phase adds no engine-level tests, matching "not itself
 unit-tested").
 
-- [ ] **Phase 14 (deferred) — In-memory mode.** `:memory:` staging connection +
+- [x] **Phase 14 (deferred) — In-memory mode.** `:memory:` staging connection +
 SQLite's native online-backup API, flushed to disk every
 `InMemoryBackupInterval` files per `InMemoryMode`. Only changes where the
 connection points/when it flushes — Phases 5–12 repositories already work
 against a plain `DbConnection`. Tests: rerun the Phase 5/10 suites
 parameterized over on-disk vs in-memory-then-flushed, asserting identical
 end state.
+Done: confirmed the real `Microsoft.Data.Sqlite.SqliteConnection.BackupDatabase`
+signature by reflecting over the installed assembly before writing
+anything (same due-diligence as Phase 9's AlphaVSS check) — `void
+BackupDatabase(SqliteConnection destination)`, called on the source,
+copying source → destination; both the periodic flush (in-memory → disk)
+and the CLI's history-seeding step (disk → in-memory) are the same
+primitive with the call site reversed. The repositories genuinely didn't
+need to change (as the phase predicted) — the only new engine-level piece
+is `IFileBackupWorker`, extracted from `FileBackupWorker` purely so
+`InMemoryFlushingFileBackupWorker` can decorate it: count calls, flush
+`inMemoryConnection.BackupDatabase(onDiskConnection)` every `flushInterval`
+files, and expose a public `Flush()` for the caller's final catch-up
+flush after the run (the last few files won't generally land exactly on
+an interval boundary, and neither does `BackupRunner.Complete`'s status
+row — so a final flush is required for the on-disk copy to reach parity,
+not optional cleanup). `BackupRunner` itself required exactly one
+change: widening `fileBackupWorker`'s parameter type from `FileBackupWorker`
+to `IFileBackupWorker` — its own `Run()` logic is untouched, matching
+"only changes where the connection points/when it flushes" literally.
+Connection routing is necessarily a *caller* decision, not something
+`BackupRunner` can own: repositories are bound to one connection at
+construction, before `BackupRunner.Run` ever parses `BackupConfig` and
+discovers `InMemoryMode`, so whoever builds the DI graph (the test
+harness, and now `Xondra.Cli`) has to parse settings once up front to
+choose which connection to bind repositories to, then let
+`BackupRunner.Run` parse them again internally as it always has — a
+small, deliberate duplication rather than changing `BackupRunner`'s
+constructor to take raw connections instead of pre-built repositories.
+Wired all the way into `Xondra.Cli`'s `backup` command (not left as an
+engine-only capability nobody can reach) and smoke-tested as a real
+process with `InMemoryBackupInterval=1` against 3 real files: three
+separate flushes landed three distinct blobs + a valid `Xondra.dat` on
+disk, and a subsequent `verify`/`restore` through the same CLI both
+succeeded on all 3 files — proving the flushed catalog is genuinely
+usable by the rest of the pipeline, not just structurally present. The
+literal "rerun the Phase 5/10 suites parameterized" instruction was
+interpreted as one new dedicated end-to-end test (not a mechanical
+parameterization of the existing `BackupRunnerTests` suite, since
+`BackupRunner`'s own behavior is unchanged and already has 3 passing
+tests) that runs the full pipeline twice — pure on-disk and
+in-memory-then-flushed — and asserts matching `BackupSet` row counts and
+`Backup` row status/`FileCount`/`ErrorCount`, plus that every flushed
+file's blob actually exists on disk, not just its catalog row. 98/98
+tests passing (92 prior + 6 new — 2 `InMemoryFlushingFileBackupWorker`,
+3 `BackupConfig`, 1 end-to-end parity).
+
+This closes out the full 14-phase build plan (Phase 14 itself was always
+labeled deferred/optional, not blocking; it's now done rather than
+skipped).
 
 ## Decisions made in this plan (flagging, not blocking)
 

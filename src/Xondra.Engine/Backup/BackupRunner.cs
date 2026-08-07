@@ -16,7 +16,7 @@ public class BackupRunner(
     LocalDirectoryRepository directoryRepository,
     ErrorRepository errorRepository,
     IncrementalPlanner incrementalPlanner,
-    FileBackupWorker fileBackupWorker)
+    IFileBackupWorker fileBackupWorker)
 {
     public long Run(long jobId)
     {
