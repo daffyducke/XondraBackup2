@@ -352,11 +352,35 @@ than a separately-tracked counter, so it can't drift from what's actually
 in the catalog. 85/85 tests passing (78 prior + 7 new — 4 `BackupConfig`,
 3 `BackupRunner`).
 
-- [ ] **Phase 11 — Verify.** `FileVerifier.VerifyFiles(mode)` for
+- [x] **Phase 11 — Verify.** `FileVerifier.VerifyFiles(mode)` for
 `CurrentBackup`/`AllNotVerified`/`All`: decrypt+decompress to temp,
 re-hash, compare to `OriginalFileHash`, write `LocalVerified`, clean up
 temp file. Tests seed a good `File` row and a deliberately corrupted one,
 assert both outcomes and that no temp files leak.
+Done: `VerifyFiles(mode, backupId = null)` — `CurrentBackup` throws
+`ArgumentException` if `backupId` isn't supplied, since that mode is
+meaningless without one. `FileRepository` gained the three candidate
+queries this phase needed (`FindNotVerified`, `FindAllStored`,
+`FindByBackupId` — the last one's the only query in the repo that joins
+out to `BackupSet`, needed to answer "which files does this specific
+backup run reference") plus `SetVerified`; all four deliberately exclude
+rows where `BackupHash IS NULL` (Phase 8's defensive
+never-actually-stored case) since there's no blob to decrypt — nothing
+worth marking pass or fail. Refactored `ReadSingle` and the three new
+list-returning queries onto one shared `ReadRecord(SqliteDataReader)` so
+the six-column mapping exists in exactly one place. The "deliberately
+corrupted" test doesn't create a good blob and then mutate it — it writes
+arbitrary non-AES/non-GZip bytes straight into the `BlobStore` under a
+fabricated hash and lets `BlobCodec.DecryptThenDecompress` fail on its
+own (bad PKCS7 padding or an invalid GZip header, matching the same
+"either failure mode is equally valid proof" reasoning from Phase 3);
+`VerifyOne` catches any exception there and reports it as a failed
+verification rather than letting it propagate, consistent with this
+engine's established per-item resilience (`DirectoryScanner`,
+`FileBackupWorker`). `VerifyOne` always deletes its `Path.GetTempFileName()`
+temp file in a `finally`, verified by a dedicated test that snapshots
+`Directory.GetFiles(Path.GetTempPath()).Length` before/after verifying
+both a good and a corrupted file. 90/90 tests passing (85 prior + 5 new).
 
 - [ ] **Phase 12 — Restore.** `RestoreService.RestoreFiles(backupId, targetRoot)`:
 join scoped to one verified backup, recreate directories, decrypt/decompress
