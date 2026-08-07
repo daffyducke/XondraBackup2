@@ -256,7 +256,7 @@ returns normally) — the loop over multiple files lives in the caller
 two-file loop to prove one bad file doesn't stop the next. 74/74 tests
 passing (71 prior + 3 new).
 
-- [ ] **Phase 9 — VSS seam.** `IVssSnapshotProvider` / `NullVssSnapshotProvider`
+- [x] **Phase 9 — VSS seam.** `IVssSnapshotProvider` / `NullVssSnapshotProvider`
 (passthrough for `UseVSS=false`) / `AlphaVssSnapshotProvider` (real).
 NuGet: `AlphaVSS` (+ platform-native companion package — confirm current
 package IDs at implementation time). Unit tests use a `FakeVssSnapshotProvider`
@@ -267,6 +267,37 @@ OS VSS service — needs admin elevation, run manually/on a dedicated leg,
 not part of the default fast test run. This is the one piece that
 structurally can't be unit-tested directly; the seam is what keeps
 everything else testable.
+Done: package is just `AlphaVSS` (2.0.3) — unlike `AlphaFS`, it genuinely
+multi-targets (`net45`/`netcoreapp3.1`) so it restores with **no** `NU1701`
+compat-shim warning; the native per-architecture binary ships in a
+separate `AlphaVSS.Native.NetCore` package pulled in automatically as a
+dependency, not referenced directly. Didn't guess the real API: loaded the
+installed `AlphaVSS.Common.dll` into a throwaway .NET console app via
+reflection (Windows PowerShell/.NET Framework couldn't load a
+`netcoreapp3.1` assembly's dependency graph, so used `dotnet run` instead)
+to confirm exact method signatures before writing `AlphaVssSnapshotProvider`
+against them — worth doing since this file has no unit test to catch a
+wrong signature at the "red" step. That reflection pass found
+`VssFactoryProvider.Default` is a static **field** (not a property, easy
+to miss with `GetProperties()`) backed by a built-in
+`DefaultVssAssemblyResolver`, so `AlphaVssSnapshotProvider` needs no custom
+`IVssAssemblyResolver` at all — simpler than the getting-started docs
+implied. `IVssSnapshot.SnapshotRoot` is `VssSnapshotProperties.SnapshotDeviceObject`
+plus the source path's portion past its volume root (e.g.
+`\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\Users\daffy\...`);
+per AlphaVSS's own sample comments, plain `System.IO` can't read paths
+shaped like that, so the integration test reads through it via
+`WindowsFileSystem` (AlphaFS) exactly as production code would, not raw
+`File.ReadAllText`. `Testing/Xondra.Engine.IntegrationTests` is scaffolded,
+referenced from `Xondra.slnx` for discoverability, and deliberately not
+run by `dotnet test Testing/Xondra.Engine.Tests` — isolation comes from it
+being a separate project directory the default command never targets, not
+from `[Fact(Skip=...)]`, so `dotnet test Testing/Xondra.Engine.IntegrationTests`
+(elevated) still runs it on demand. Since there's no orchestrator
+(`BackupRunner`) yet to prove "asks for/tears down a snapshot" against,
+`FakeVssSnapshotProviderTests` proves the fake itself models that
+create→use→dispose lifecycle correctly — standing in for that proof now,
+consumed for real by Phase 10. 78/78 tests passing (74 prior + 4 new).
 
 - [ ] **Phase 10 — Backup orchestration (first end-to-end pipeline).**
 `BackupRunner.Run(jobId)`: load settings → start `Backup` row → scan →

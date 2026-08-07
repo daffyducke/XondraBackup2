@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="AlphaFS" Version="2.2.6" />
+    <PackageReference Include="AlphaVSS" Version="2.0.3" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
   </ItemGroup>

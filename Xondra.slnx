@@ -4,5 +4,6 @@
   </Folder>
   <Folder Name="/Testing/">
     <Project Path="Testing/Xondra.Engine.Tests/Xondra.Engine.Tests.csproj" />
+    <Project Path="Testing/Xondra.Engine.IntegrationTests/Xondra.Engine.IntegrationTests.csproj" />
   </Folder>
 </Solution>
